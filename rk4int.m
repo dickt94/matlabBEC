@@ -3,9 +3,10 @@
 %using timestep dt and an RK4 algorithm.
 
 %arguments:
-%ci - initial field, column vector of size N
-%f - function handle, takes arguments c,t, returns column vector of size N
-%g - function handle, takes arguments c,t, returns N*N matrix
+%ci - initial field, vector of size N
+%f - function handle, takes arguments c,t, returns vector of size N
+%g - function handle, takes arguments c,t, returns N*nnoise matrix
+%nnoise - number of noise processes
 %ti - initial time
 %tf - final time
 %dt - desired time step
@@ -16,9 +17,20 @@
 %also performs a half-step integration with timestep dt/2 to check
 %convergence.
 
+
+%outputs:
+%sdata - cell array containing sample results. The nth element of sdata
+%corresponds to the nth function passed in moments, and should be an array
+%of dimensionality one greater than that of the array returned by the
+%sample function. These arrays are formed by concatenating the sample
+%results along their first singleton dimension.
+%tdata - cell array containing 1D arrays of sampling times. nth element
+%corresponds to nth element of moments.
+
+
 %Richard Taylor, 2018.
 
-function [sdata,tdata]=rk4int(ci,f,g,ti,tf,dt,moments,samples)
+function [sdata,tdata]=rk4int(ci,f,g,nnoise,ti,tf,dt,moments,samples)
     
     function v=G(d,u,dX)
         v=(f(d,u)+g(d,u)*dX);
@@ -28,7 +40,8 @@ function [sdata,tdata]=rk4int(ci,f,g,ti,tf,dt,moments,samples)
     t=ti;
     
     
-    rng(0);
+    rng('shuffle');
+    seed=rng;
     
     %figure out when to take samples
     stepcount=0;
@@ -38,20 +51,37 @@ function [sdata,tdata]=rk4int(ci,f,g,ti,tf,dt,moments,samples)
     %initialise sample return
     sdata=cell(length(moments),1);
     tdata=cell(length(moments),1);
+    sampdim=cell(length(moments),1);
     
     %initial sample
     for i=1:length(moments)
-        sdata{i}=cat(1,sdata{i},moments{i}(c,t));
+        %sampling concatenates along the first singleton dimension, or if
+        %there is none, makes an extra dimension to concatenate along. This
+        %should result in correct handling of sample functions that return
+        %column vectors and row vectors, or higher-dimensional arrays.
+        samp=moments{i}(c,t);
+        ssamp=size(samp);
+        sampdim{i}=1;
+        for p=1:length(ssamp)
+            if ssamp(p)==1
+                break;
+            end
+            sampdim{i}=sampdim{i}+1;
+        end
+        sdata{i}=cat(sampdim{i},sdata{i},samp);
         tdata{i}(length(tdata{i})+1)=t;
+        fprintf("Sampled function %d at t=%f\n",i,t);
     end
+    
+    sigma=sqrt(2/dt);
     
     while 1
         if dt < tf-t
             
-            dW1=normrnd(0,1,size(c));
-            dW2=normrnd(0,1,size(c));%roll twice - this keeps the seeding the same for halfstep
+            dW1=normrnd(0,sigma,[nnoise 1]);
+            dW2=normrnd(0,sigma,[nnoise 1]);%roll twice - this keeps the seeding the same for halfstep
             
-            dW=(dW1+dW2)/sqrt(2*dt);
+            dW=(dW1+dW2)/2;
     
 
     
@@ -72,8 +102,8 @@ function [sdata,tdata]=rk4int(ci,f,g,ti,tf,dt,moments,samples)
             
         else
             dt1=tf-t;
-            dW1=normrnd(0,1,size(c));
-            dW2=normrnd(0,1,size(c));%roll twice - this keeps the seeding the same for halfstep
+            dW1=normrnd(0,1,[nnoise 1]);
+            dW2=normrnd(0,1,[nnoise 1]);%roll twice - this keeps the seeding the same for halfstep
             
             dW=(dW1+dW2)/sqrt(2*dt1);
     
@@ -99,8 +129,9 @@ function [sdata,tdata]=rk4int(ci,f,g,ti,tf,dt,moments,samples)
         takeSample=~mod(stepcount,sint);
         for i=1:length(takeSample)
             if takeSample(i)
-                sdata{i}=cat(2,sdata{i},moments{i}(c,t));
+                sdata{i}=cat(sampdim{i},sdata{i},moments{i}(c,t));
                 tdata{i}(length(tdata{i})+1)=t;
+                fprintf("Sampled function %d at t=%f\n",i,t);
             end
         end
 
@@ -112,11 +143,11 @@ function [sdata,tdata]=rk4int(ci,f,g,ti,tf,dt,moments,samples)
     c=ci;
     t=ti;
     dt=dt/2;
-    rng(0);%same noises as for full-step
+    rng(seed);%same noises as for full-step
     while 1
         if dt < tf-t
             
-            dW=normrnd(0,1,size(c))/sqrt(dt);
+            dW=normrnd(0,sigma,[nnoise 1]);
     
 
     
@@ -137,7 +168,7 @@ function [sdata,tdata]=rk4int(ci,f,g,ti,tf,dt,moments,samples)
             
         else
             dt1=tf-t;
-            dW=normrnd(0,1,size(c))/sqrt(dt1);
+            dW=normrnd(0,1,[nnoise 1])/sqrt(dt1);
     
 
     
