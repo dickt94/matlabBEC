@@ -1,4 +1,5 @@
-%rk4int - stochastic RK4 integrator.
+%rk4int_direct - stochastic RK4 integrator. Special version for comparison
+%with NPW simulation.
 %integrates the Stratonovich equation dc=f(c,t)dt+g(c,t)dW from ti to tf,
 %using timestep dt and an RK4 algorithm.
 
@@ -15,9 +16,9 @@
 %accept c,t as arguments.
 %samples - array of numbers of samples to be taken
 %diag - bool, are the noises diagonal?
-%filters - cell array of functions that accept c,t as arguments
-%and return a new c. These are executed every step at step end, in 
-%sequence. The field is replaced by that returned by the filter.
+%filters - cell array of functions that accept c,t as arguments and return 
+%a new c. These are executed every step at step end, in sequence. The field
+%is replaced by that returned by the filter.
 
 %also performs a half-step integration with timestep dt/2 to check
 %convergence.
@@ -49,8 +50,6 @@ function [sdata,tdata]=rk4int(ci,f,g,nnoise,ti,tf,nsteps,moments,samples,diag,fi
     t=ti;
     
     
-    rng('shuffle');
-    seed=rng;
     
     %figure out when to take samples
     stepcount=0;
@@ -84,10 +83,15 @@ function [sdata,tdata]=rk4int(ci,f,g,nnoise,ti,tf,nsteps,moments,samples,diag,fi
     
     sigma=sqrt(2/dt);
     
+    %roll noises now with fixed seed, for compatibility with NPW
+    %simulation.
+    rng(314159265);
+    rnoises=normrnd(0,sigma,[2*(nsteps+1) 1]);
+    
 
     while stepcount < nsteps
-        dW1=normrnd(0,sigma,[nnoise 1]);
-        dW2=normrnd(0,sigma,[nnoise 1]);%roll twice - this keeps the seeding the same for halfstep
+        dW1=rnoises(2*stepcount+1);
+        dW2=rnoises(2*stepcount+2);%roll twice - this keeps the seeding the same for halfstep
         
         dW=(dW1+dW2)/2;
 
@@ -133,12 +137,12 @@ function [sdata,tdata]=rk4int(ci,f,g,nnoise,ti,tf,nsteps,moments,samples,diag,fi
     c=ci;
     t=ti;
     dt=dt/2;
-    rng(seed);%same noises as for full-step
+    
     
     stepcount=0;
     while stepcount<nsteps*2
             
-        dW=normrnd(0,sigma,[nnoise 1]);
+        dW=rnoises(stepcount+1);
     
 
     

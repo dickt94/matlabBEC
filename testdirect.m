@@ -6,8 +6,8 @@ function [S,T]=testdirect()
     nnoise=1;
     nbar=10;
     
-    alpha=sqrt(nbar);
-    gamma=1;
+    alph=sqrt(nbar);
+    gamma=1.0;
     sgam=sqrt(gamma);
     
     %define field operators
@@ -17,7 +17,7 @@ function [S,T]=testdirect()
     
     %coherent state initial
     n=0:nmodes-1;
-    psi0=exp(-abs(alpha)^2/2)*(alpha.^n)./sqrt(factorial(n));
+    psi0=exp(-abs(alph)^2/2)*(alph.^n)./sqrt(factorial(n));
     
     rho0=conj(psi0.')*psi0;
     
@@ -49,8 +49,7 @@ function [S,T]=testdirect()
     end
 
     interval=6;
-    nsteps=20000;
-    dt=interval/nsteps;
+    nsteps=15000;
     
     function sample=s(rhovec,t)
         rho=reshape(rhovec,[nmodes nmodes]);
@@ -78,6 +77,6 @@ function [S,T]=testdirect()
         sample=samplemat(:);
     end
     
-    [S,T]=rk4int(rhovec0,@f,@g,nnoise,0,interval,dt,{@s,@s2,@stratcorrection,@innov},[100 100 100 100]);
+    [S,T]=rk4int_direct(rhovec0,@f,@g,nnoise,0,interval,nsteps,{@s,@s2,@stratcorrection,@innov},[100 100 100 100],false,{});
     
 end
