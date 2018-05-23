@@ -77,6 +77,6 @@ function [S,T]=testdirect()
         sample=samplemat(:);
     end
     
-    [S,T]=rk4int_direct(rhovec0,@f,@g,nnoise,0,interval,nsteps,{@s,@s2,@stratcorrection,@innov},[100 100 100 100],false,{});
+    [S,T]=rk4int(rhovec0,@f,1,{@g},nnoise,314159265,0,interval,nsteps,{@s,@s2,@stratcorrection,@innov},[100 100 100 100],false,{});
     
 end

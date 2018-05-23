@@ -19,6 +19,9 @@ function [x,w,T] = nfieldtrans(M,n,varargin)
     w=exp(log(w)+x.^2)/sqrt(n*omega/2);
     T=eigmat(M,x/sqrt(n*omega/2),'omega',omega);
     
+    x=x.';
+    w=w.';
+    
 end
 
 %memesss
