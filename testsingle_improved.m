@@ -11,7 +11,7 @@ function [S,T]=testsingle_improved()
 
     %k samples of n - drawn from Poissonian distribution to represent
     %sampling an initial coherent state
-    k=10000;
+    k=15000;
     nnoise=[3*k 1];%k fictitious noises but it's easier to just roll them for the whole vector
     rng('shuffle');
     for c=1:k
