@@ -21,6 +21,10 @@
 %filters - cell array of functions that accept c,t as arguments
 %and return a new c. These are executed every step at step end, in 
 %sequence. The field is replaced by that returned by the filter.
+%ipop - interaction picture operator, N*N matrix if ipdiag is 0, else N*1
+%vector
+%ipdiag - is the ip operator diagonal?
+
 
 %also performs a half-step integration with timestep dt/2 to check
 %convergence.
@@ -39,7 +43,7 @@
 
 %todo: move sampling to half-step to give more precision I guess.
 
-function [sdata,tdata]=rk4int(ci,f,nproc,g,nnoise,seed,ti,tf,nsteps,moments,samples,diag,filters)
+function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,moments,samples,diag,filters)
     
     %create random streams with seeds specified. Calling from any one
     %stream should not affect the other.
