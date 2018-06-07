@@ -52,7 +52,7 @@ function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,
         %create a random stream with the specified seed
         streams{count}=RandStream.create('dsfmt19937', 'NumStreams',1,'Seed',seed(count));
     end
-
+    
     function v=G(d,u,dX)
         v=f(d,u);
         for cnt=1:nproc
@@ -72,6 +72,16 @@ function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,
     stepcount=0;
     dt=(tf-ti)/nsteps;
     sint=round(nsteps./samples);
+    
+    if ~isempty(ipop)
+        if ipdiag
+            evolip=exp(ipop*dt/2);
+        else
+            evolip=expm(ipop*dt/2);
+        end
+    else
+        evolip=1;
+    end
     
     %initialise sample return
     sdataf=cell(length(moments),1);
@@ -112,20 +122,37 @@ function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,
 
 
     
-        cI=c;
-        ck=G(c,t,dW)*dt;%k1
-        c=c+ck/6;
-        ck=ck/2+cI;
-        t=t+dt/2;
-        ck=G(ck,t,dW)*dt;%k2
-        c=c+ck/3;
-        ck=ck/2+cI;
-        ck=G(ck,t,dW)*dt;%k3
-        c=c+ck/3;
-        ck=ck+cI;
-        t=t+dt/2;
-        ck=G(ck,t,dW)*dt;%k4
-        c=c+ck/6;
+        if ipdiag
+            cI=evolip.*c;
+            ck=evolip.*G(c,t,dW)*dt;%k1
+            c=cI+ck/6;
+            ck=ck/2+cI;
+            t=t+dt/2;
+            ck=G(ck,t,dW)*dt;%k2
+            c=c+ck/3;
+            ck=ck/2+cI;
+            ck=G(ck,t,dW)*dt;%k3
+            c=c+ck/3;
+            ck=evolip.*(ck+cI);
+            t=t+dt/2;
+            ck=G(ck,t,dW)*dt;%k4
+            c=evolip.*c+ck/6;
+        else
+            cI=evolip*c;
+            ck=evolip*G(c,t,dW)*dt;%k1
+            c=cI+ck/6;
+            ck=ck/2+cI;
+            t=t+dt/2;
+            ck=G(ck,t,dW)*dt;%k2
+            c=c+ck/3;
+            ck=ck/2+cI;
+            ck=G(ck,t,dW)*dt;%k3
+            c=c+ck/3;
+            ck=evolip*(ck+cI);
+            t=t+dt/2;
+            ck=G(ck,t,dW)*dt;%k4
+            c=evolip*c+ck/6;
+        end
         
         %do filters
         for i=1:length(filters)
@@ -153,6 +180,17 @@ function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,
     c=ci;
     t=ti;
     dt=dt/2;
+    
+    %recalc the IP matrix for halfstep
+    if ~isempty(ipop)
+        if ipdiag
+            evolip=exp(ipop*dt/2);
+        else
+            evolip=expm(ipop*dt/2);
+        end
+    else
+        evolip=1;
+    end
     
     %same noises as for full-step
     for count=1:nproc
@@ -199,20 +237,37 @@ function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,
     
 
     
-        cI=c;
-        ck=G(c,t,dW)*dt;%k1
-        c=c+ck/6;
-        ck=ck/2+cI;
-        t=t+dt/2;
-        ck=G(ck,t,dW)*dt;%k2
-        c=c+ck/3;
-        ck=ck/2+cI;
-        ck=G(ck,t,dW)*dt;%k3
-        c=c+ck/3;
-        ck=ck+cI;
-        t=t+dt/2;
-        ck=G(ck,t,dW)*dt;%k4
-        c=c+ck/6;
+        if ipdiag
+            cI=evolip.*c;
+            ck=evolip.*G(c,t,dW)*dt;%k1
+            c=cI+ck/6;
+            ck=ck/2+cI;
+            t=t+dt/2;
+            ck=G(ck,t,dW)*dt;%k2
+            c=c+ck/3;
+            ck=ck/2+cI;
+            ck=G(ck,t,dW)*dt;%k3
+            c=c+ck/3;
+            ck=evolip.*(ck+cI);
+            t=t+dt/2;
+            ck=G(ck,t,dW)*dt;%k4
+            c=evolip.*c+ck/6;
+        else
+            cI=evolip*c;
+            ck=evolip*G(c,t,dW)*dt;%k1
+            c=cI+ck/6;
+            ck=ck/2+cI;
+            t=t+dt/2;
+            ck=G(ck,t,dW)*dt;%k2
+            c=c+ck/3;
+            ck=ck/2+cI;
+            ck=G(ck,t,dW)*dt;%k3
+            c=c+ck/3;
+            ck=evolip*(ck+cI);
+            t=t+dt/2;
+            ck=G(ck,t,dW)*dt;%k4
+            c=evolip*c+ck/6;
+        end
         
         
         %do filters

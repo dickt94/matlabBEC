@@ -72,5 +72,5 @@ function [samples,times]=spgpesample()
 
     ipevol=-(1i+gamma_x)*(nx+0.5);
 
-    [samples,times]=rk4int(c0,@f,ipevol,true,2,{@g1,@g2},[nmodes nmodes],[103029 837189039],0,time_int,50000,{@norm,@dens},[1000 1000],[true true],{});
+    [samples,times]=rk4int(c0,@f,ipevol,true,2,{@g1,@g2},[nmodes nmodes],[103029 837189039],0,time_int,50000,{@norm,@dens},[500 500],[true true],{});
 end
