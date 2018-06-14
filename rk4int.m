@@ -3,11 +3,11 @@
 %using timestep dt and an RK4 algorithm.
 
 %arguments:
-%ci - initial field, vector of size N
+%ci - initial field, size N
 %f - function handle, takes arguments c,t, returns vector of size N
 %nproc - number of noise processes
-%g - nproc length cell array of function handles, takes arguments c,t, returns N*nnoise matrix or
-%nnoise*1 vector if diag is 1.
+%g - nproc length cell array of function handles, takes arguments c,t, dW
+%and returns array of size N
 %nnoise - sizes of noise processes - vector of length nproc
 %seed - nproc length vector of seeds for each noise process. Defaults to
 %'shuffle' seed if set to zero.
@@ -17,7 +17,6 @@
 %moments - cell array function handles to be sampled, size M. Functions
 %accept c,t as arguments.
 %samples - array of numbers of samples to be taken
-%diag - array of bool, is each of the noises diagonal?
 %filters - cell array of functions that accept c,t as arguments
 %and return a new c. These are executed every step at step end, in 
 %sequence. The field is replaced by that returned by the filter.
@@ -43,7 +42,7 @@
 
 %todo: move sampling to half-step to give more precision I guess.
 
-function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,moments,samples,diag,filters)
+function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,moments,samples,filters)
     
     %create random streams with seeds specified. Calling from any one
     %stream should not affect the other.
@@ -56,11 +55,7 @@ function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,
     function v=G(d,u,dX)
         v=f(d,u);
         for cnt=1:nproc
-            if diag(cnt)
-                v=v+g{cnt}(d,u).*dX{cnt};
-            else
-                v=v+g{cnt}(d,u)*dX{cnt};
-            end
+            v=v+g{cnt}(d,u,dX{cnt});
         end
         
     end

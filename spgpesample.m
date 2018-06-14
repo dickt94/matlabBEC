@@ -42,11 +42,9 @@ function [samples,times]=spgpesample()
     [x_4f,w_4f,trans_4f]=nfieldtrans(nmodes,4);
     invtrans_4f=trans_4f';
 
-    size(w_4f)
-
     function F=f(c,t)
 
-        F=-(1i+gamma_x)*(-mu).*c;
+        F=0;
 
         %add the nonlinear term
         psi=trans_4f*c;
@@ -54,12 +52,12 @@ function [samples,times]=spgpesample()
 
     end
 
-    function G=g1(c,t)
-        G=1/sqrt(2)*sgT*ones(nmodes,1);
+    function G=g1(c,t,dW)
+        G=1/sqrt(2)*sgT*dW;
     end
 
-    function G=g2(c,t)
-        G=1i/sqrt(2)*sgT*ones(nmodes,1);
+    function G=g2(c,t,dW)
+        G=1i/sqrt(2)*sgT*dW;
     end
 
     function s=norm(c,t)
@@ -70,7 +68,11 @@ function [samples,times]=spgpesample()
         d=conj(c).*c;
     end
 
-    ipevol=-(1i+gamma_x)*(nx+0.5);
+    function smp=fieldsamp(c,t)
+        smp=c;
+    end
 
-    [samples,times]=rk4int(c0,@f,ipevol,true,2,{@g1,@g2},[nmodes nmodes],[103029 837189039],0,time_int,50000,{@norm,@dens},[500 500],[true true],{});
+    ipevol=-(1i+gamma_x)*(nx+0.5-mu);
+
+    [samples,times]=rk4int(c0,@f,ipevol,true,2,{@g1,@g2},[nmodes nmodes],[103029 837189039],0,time_int,50000,{@norm,@dens,@fieldsamp},[500 500 100],{});
 end
