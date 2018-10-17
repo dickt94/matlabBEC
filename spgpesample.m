@@ -1,9 +1,11 @@
 function [samples,times]=spgpesample()
     %SPGPE simulation in HG basis, to produce initial states for integration of
     %NPW simulation.
-    nmodes=128;
+    nmodes=30;
     c0=zeros([nmodes 1]);
-    c0(1)=1;%start in ground state
+    c0(1)=1;%start in (HG) ground state
+    
+    %todo: start at TF ground state
 
     nx=(0:nmodes-1).';
 
@@ -18,24 +20,24 @@ function [samples,times]=spgpesample()
     Lambda = 50.0;
 
     % Temperature
-    T = 50.0;
+    T = 11.0;
 
     % Effective 1D interaction strength
-    g_1D = 2.0 * Lambda * a_s / sqrt( hbar / (m * omega_x) );
+    g_1D = 0.4;%2.0 * Lambda * a_s / sqrt( hbar / (m * omega_x) );
 
     % Chemical potential
-    mu = 0.8* T;
+    mu = 40;
 
     % Growth rate (assumed to be constant accros grid). For equilibrium
     % distribution this precise value doesn't matter.
-    gamma_x = 3.0e-2;
+    gamma_x = 1.0;
     % Prefactor for noise correlator. 
     sgT = sqrt(2.0 * gamma_x * T);
 
     % EVOLUTION
 
     % Time interval of integration
-    time_int = 100.0;
+    time_int = 1000.0;
 
 
     %generate transforms here
@@ -74,5 +76,5 @@ function [samples,times]=spgpesample()
 
     ipevol=-(1i+gamma_x)*(nx+0.5-mu);
 
-    [samples,times]=rk4int(c0,@f,ipevol,true,2,{@g1,@g2},[nmodes nmodes],[103029 837189039],0,time_int,50000,{@norm,@dens,@fieldsamp},[500 500 100],{});
+    [samples,times]=rk4int(c0,@f,ipevol,true,2,{@g1,@g2},{[nmodes 1] [nmodes 1]},[103029 837189039],0,time_int,500000,{@norm,@dens,@fieldsamp},[500 500 10000],{},false);
 end

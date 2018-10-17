@@ -8,7 +8,8 @@
 %nproc - number of noise processes
 %g - nproc length cell array of function handles, takes arguments c,t, dW
 %and returns array of size N
-%nnoise - sizes of noise processes - vector of length nproc
+%nnoise - sizes of noise processes - cell array of matrices with noise
+%sizes in each dimension
 %seed - nproc length vector of seeds for each noise process. Defaults to
 %'shuffle' seed if set to zero.
 %ti - initial time
@@ -23,7 +24,7 @@
 %ipop - interaction picture operator, N*N matrix if ipdiag is 0, else N*1
 %vector
 %ipdiag - is the ip operator diagonal?
-
+%errorcheck - bool - perform half-step integration?
 
 %also performs a half-step integration with timestep dt/2 to check
 %convergence.
@@ -42,7 +43,7 @@
 
 %todo: move sampling to half-step to give more precision I guess.
 
-function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,moments,samples,filters)
+function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,moments,samples,filters,errorcheck)
     
     %create random streams with seeds specified. Calling from any one
     %stream should not affect the other.
@@ -109,8 +110,8 @@ function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,
     while stepcount < nsteps
         dW=cell(nproc,1);
         for count=1:nproc
-            dW1=sigma*randn(streams{count},[nnoise(count) 1]);
-            dW2=sigma*randn(streams{count},[nnoise(count) 1]);%roll twice - this keeps the seeding the same for halfstep
+            dW1=sigma*randn(streams{count},[nnoise{count} 1]);
+            dW2=sigma*randn(streams{count},[nnoise{count} 1]);%roll twice - this keeps the seeding the same for halfstep
         
             dW{count}=(dW1+dW2)/2;
         end
@@ -169,142 +170,147 @@ function [sdata,tdata]=rk4int(ci,f,ipop,ipdiag,nproc,g,nnoise,seed,ti,tf,nsteps,
 
     
     %half-step
+    if errorcheck
+        fprintf("Beginning half-step integration...\n");
 
-    fprintf("Beginning half-step integration...\n");
-    
-    c=ci;
-    t=ti;
-    dt=dt/2;
-    
-    %recalc the IP matrix for halfstep
-    if ~isempty(ipop)
-        if ipdiag
-            evolip=exp(ipop*dt/2);
-        else
-            evolip=expm(ipop*dt/2);
-        end
-    else
-        evolip=1;
-    end
-    
-    %same noises as for full-step
-    for count=1:nproc
-        %create a random stream with the specified seed
-        streams{count}=RandStream.create('dsfmt19937', 'NumStreams',1,'Seed',seed(count));
-    end
-    
-    
-    %initialise half-step sample return
-    sdata=cell(length(moments),1);
-    tdata=cell(length(moments),1);
-    sampdim=cell(length(moments),1);
-    
-    %initial sample
-    for i=1:length(moments)
-        %sampling concatenates along the first singleton dimension, or if
-        %there is none, makes an extra dimension to concatenate along. This
-        %should result in correct handling of sample functions that return
-        %column vectors and row vectors, or higher-dimensional arrays.
-        samp=moments{i}(c,t);
-        ssamp=size(samp);
-        sampdim{i}=1;
-        for p=1:length(ssamp)
-            if ssamp(p)==1
-                break;
+        c=ci;
+        t=ti;
+        dt=dt/2;
+
+        %recalc the IP matrix for halfstep
+        if ~isempty(ipop)
+            if ipdiag
+                evolip=exp(ipop*dt/2);
+            else
+                evolip=expm(ipop*dt/2);
             end
-            sampdim{i}=sampdim{i}+1;
+        else
+            evolip=1;
         end
-        sdata{i}=cat(sampdim{i},sdata{i},samp);
-        tdata{i}(length(tdata{i})+1)=t;
-        fprintf("Sampled moment %d at t=%f\n",i,t);
-    end
-    
-    serr=zeros([length(moments) 1]);
-    
-    
-    stepcount=0;
-    while stepcount<nsteps*2
-            
-        dW=cell(nproc,1);
+
+        %same noises as for full-step
         for count=1:nproc
-            dW{count}=sigma*randn(streams{count},[nnoise(count) 1]);
+            %create a random stream with the specified seed
+            streams{count}=RandStream.create('dsfmt19937', 'NumStreams',1,'Seed',seed(count));
         end
     
+    
+        %initialise half-step sample return
+        sdata=cell(length(moments),1);
+        tdata=cell(length(moments),1);
+        sampdim=cell(length(moments),1);
 
-    
-        if ipdiag
-            cI=evolip.*c;
-            ck=evolip.*G(c,t,dW)*dt;%k1
-            c=cI+ck/6;
-            ck=ck/2+cI;
-            t=t+dt/2;
-            ck=G(ck,t,dW)*dt;%k2
-            c=c+ck/3;
-            ck=ck/2+cI;
-            ck=G(ck,t,dW)*dt;%k3
-            c=c+ck/3;
-            ck=evolip.*(ck+cI);
-            t=t+dt/2;
-            ck=G(ck,t,dW)*dt;%k4
-            c=evolip.*c+ck/6;
-        else
-            cI=evolip*c;
-            ck=evolip*G(c,t,dW)*dt;%k1
-            c=cI+ck/6;
-            ck=ck/2+cI;
-            t=t+dt/2;
-            ck=G(ck,t,dW)*dt;%k2
-            c=c+ck/3;
-            ck=ck/2+cI;
-            ck=G(ck,t,dW)*dt;%k3
-            c=c+ck/3;
-            ck=evolip*(ck+cI);
-            t=t+dt/2;
-            ck=G(ck,t,dW)*dt;%k4
-            c=evolip*c+ck/6;
-        end
-        
-        
-        %do filters
-        for i=1:length(filters)
-            c=filters{i}(c,t);
-        end
-        
-        
-        stepcount=stepcount+1;
-        takeSample=~mod(stepcount,sint*2);%half-step samples
-        for i=1:length(takeSample)
-            if takeSample(i)
-                samp=moments{i}(c,t);
-                
-                sdata{i}=cat(sampdim{i},sdata{i},samp);
-                tdata{i}(length(tdata{i})+1)=t;
-                
-                %todo calculate error for ith moment and check if bigger
-                %than maximum
-                
-                szfsamp=size(sdataf{i});
-                inds=cell(1,length(szfsamp));
-                for p=1:length(szfsamp)
-                    if p==sampdim{i}
-                        inds{p}=round(stepcount/(sint(i)*2))+1;
-                    else
-                        inds{p}=1:szfsamp(p);
-                    end
+        %initial sample
+        for i=1:length(moments)
+            %sampling concatenates along the first singleton dimension, or if
+            %there is none, makes an extra dimension to concatenate along. This
+            %should result in correct handling of sample functions that return
+            %column vectors and row vectors, or higher-dimensional arrays.
+            samp=moments{i}(c,t);
+            ssamp=size(samp);
+            sampdim{i}=1;
+            for p=1:length(ssamp)
+                if ssamp(p)==1
+                    break;
                 end
-                fullsamp=sdataf{i}(inds{:});
-                steperr=norm(fullsamp-samp,inf);
-                if steperr>serr(i)
-                    serr(i)=steperr;
-                end
-                fprintf("Sampled moment %d at t=%f\n",i,t);
+                sampdim{i}=sampdim{i}+1;
             end
+            sdata{i}=cat(sampdim{i},sdata{i},samp);
+            tdata{i}(length(tdata{i})+1)=t;
+            fprintf("Sampled moment %d at t=%f\n",i,t);
+        end
+
+        serr=zeros([length(moments) 1]);
+
+
+        stepcount=0;
+        while stepcount<nsteps*2
+
+            dW=cell(nproc,1);
+            for count=1:nproc
+                dW{count}=sigma*randn(streams{count},[nnoise{count} 1]);
+            end
+
+
+
+            if ipdiag
+                cI=evolip.*c;
+                ck=evolip.*G(c,t,dW)*dt;%k1
+                c=cI+ck/6;
+                ck=ck/2+cI;
+                t=t+dt/2;
+                ck=G(ck,t,dW)*dt;%k2
+                c=c+ck/3;
+                ck=ck/2+cI;
+                ck=G(ck,t,dW)*dt;%k3
+                c=c+ck/3;
+                ck=evolip.*(ck+cI);
+                t=t+dt/2;
+                ck=G(ck,t,dW)*dt;%k4
+                c=evolip.*c+ck/6;
+            else
+                cI=evolip*c;
+                ck=evolip*G(c,t,dW)*dt;%k1
+                c=cI+ck/6;
+                ck=ck/2+cI;
+                t=t+dt/2;
+                ck=G(ck,t,dW)*dt;%k2
+                c=c+ck/3;
+                ck=ck/2+cI;
+                ck=G(ck,t,dW)*dt;%k3
+                c=c+ck/3;
+                ck=evolip*(ck+cI);
+                t=t+dt/2;
+                ck=G(ck,t,dW)*dt;%k4
+                c=evolip*c+ck/6;
+            end
+
+
+            %do filters
+            for i=1:length(filters)
+                c=filters{i}(c,t);
+            end
+
+
+            stepcount=stepcount+1;
+            takeSample=~mod(stepcount,sint*2);%half-step samples
+            for i=1:length(takeSample)
+                if takeSample(i)
+                    samp=moments{i}(c,t);
+
+                    sdata{i}=cat(sampdim{i},sdata{i},samp);
+                    tdata{i}(length(tdata{i})+1)=t;
+
+                    %todo calculate error for ith moment and check if bigger
+                    %than maximum
+
+                    szfsamp=size(sdataf{i});
+                    inds=cell(1,length(szfsamp));
+                    for p=1:length(szfsamp)
+                        if p==sampdim{i}
+                            inds{p}=round(stepcount/(sint(i)*2))+1;
+                        else
+                            inds{p}=1:szfsamp(p);
+                        end
+                    end
+                    fullsamp=sdataf{i}(inds{:});
+                    steperr=norm(fullsamp-samp,inf);
+                    if steperr>serr(i)
+                        serr(i)=steperr;
+                    end
+                    fprintf("Sampled moment %d at t=%f\n",i,t);
+                end
+            end
+
+        end
+
+        for p=1:length(moments)
+            fprintf("Maximum step error in moment %d was %f\n",p,serr(p));
         end
         
-    end
-    
-    for p=1:length(moments)
-        fprintf("Maximum step error in moment %d was %f\n",p,serr(p));
+    else
+        sdata=sdataf;
+        tdata=tdataf;
     end
     
 end

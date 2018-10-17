@@ -1,39 +1,15 @@
 function [samples,times]=npw_nofilter()
-    %initialise RNG (comment out for parfor, deal with random substreams
-    %independently or use default behaviour
-    %rng('shuffle');
     %NPW simulation without system-filter separation
     nmodes=30;
-    npaths=800;
+    npaths=300;
     initw=zeros([1 npaths]);%initial log weights
     
     %import initial state
     %field representation should be c-matrix of size [npaths nmodes+1].
     %last element of each row holds the log weight.
-    sample=0;
+    sample=zeros([nmodes npaths]);
     load('sample-lowtemp.mat','sample');
-    %shuffle the sample
-    sample=sample(:,randperm(size(sample,2)));
-    %take a path from the thermal SPGPE state and use it to generate an NPW
-    %state
-    
-    alpha0_n=sample(:,1);
-    n0k=zeros([nmodes npaths]);
-    phi0k=zeros([nmodes npaths]);
-    
-    for k=1:npaths
-        n0k(:,k)=poissrnd(abs(alpha0_n).^2);
-        for nlev=1:nmodes
-            if n0k(nlev,k)==0
-                phi0k(nlev,k)=2*pi*rand();
-            else
-                phi0k(nlev,k)=normrnd(angle(alpha0_n(nlev)),1/4*psi(1,n0k(nlev,k)+1));
-            end
-        end
-    end
-    
-    c0=zeros([nmodes+1 npaths]);
-    c0(1:end-1,:)=sqrt(n0k+1/2).*exp(1i*phi0k);
+    c0=[sample(:,end-npaths+1:end);initw];
 
     
     %test the ground state
@@ -43,7 +19,6 @@ function [samples,times]=npw_nofilter()
     %test excited state
     %c0=zeros([nmodes+1 npaths]);
     %c0(1,end)=1;
-    
     
     nx=(0:nmodes-1).';
     
@@ -67,7 +42,7 @@ function [samples,times]=npw_nofilter()
     Lambda = 50.0;
     
     % Effective 1D interaction strength
-    g_1D = 0.4;%2.0 * Lambda * a_s / sqrt( hbar / (m * omega_x) );
+    g_1D = 2.0 * Lambda * a_s / sqrt( hbar / (m * omega_x) );
 
     % Chemical potential
     %mu = 0;%0.8* T;
@@ -80,10 +55,10 @@ function [samples,times]=npw_nofilter()
     
     %measurement params
     %strength
-    alpha=0.00;
+    alpha=0.000;
     sqrta=sqrt(alpha);
     %resolution
-    r=0.1;
+    r=0.01;
     %efficiency
     eta=1.0;
     sqrte=sqrt(eta);
@@ -91,13 +66,13 @@ function [samples,times]=npw_nofilter()
     %feedback params
     fbsl=1.0;%1.0;
     fbbr=0.25;%0.25;
-    fbnl=40;%100.0;
+    fbnl=10;%100.0;
     
     % EVOLUTION
 
     % Time interval of integration
-    time_int=10;
-    nsteps=25000;
+    time_int = 4.0;
+    nsteps=4000;
 
 
     %generate transforms here
@@ -109,9 +84,8 @@ function [samples,times]=npw_nofilter()
     invtrans_3f=trans_3f';
     
     %three-field fourier transform - useful for things like FT of density
-    f3f=trans_3f*(((-1i).^nx).*invtrans_3f);
-    fourier_3f=w_3f'.*f3f;
-    invfourier_3f=w_3f'.*f3f';
+    fourier_3f=trans_3f*(((-1i).^nx).*invtrans_3f);
+    invfourier_3f=fourier_3f';
     
     %dummy initial state
     %psi0=exp(-(x_2f-1).^2 /2);
@@ -123,35 +97,6 @@ function [samples,times]=npw_nofilter()
     %k0=0;
     %psi0=exp(1i*k0*x_2f).*psi0;
     %c0(1:end-1,:)=invtrans_2f*psi0;
-    
-    
-    %sample a coherent BEC (for testing against Michael's NJP)
-    %coherent state magnitudes alpha
-    %part_num=1124;
-    %x0=0;
-    %sig=4.0;
-    %alpha0_x=sqrt(part_num/(sqrt(2*pi)*sig))*exp(-(x_2f-x0).^2/(4*sig^2));
-    %transform the coherent state magnitudes to HG space
-    %alpha0_n=invtrans_2f*(w_2f.*alpha0_x);
-    %n0k=zeros([nmodes npaths]);
-    %phi0k=zeros([nmodes npaths]);
-    
-    %for k=1:npaths
-    %    n0k(:,k)=poissrnd(abs(alpha0_n).^2);
-    %    for nlev=1:nmodes
-    %        if n0k(nlev,k)==0
-    %            phi0k(nlev,k)=2*pi*rand();
-    %        else
-    %            phi0k(nlev,k)=normrnd(angle(alpha0_n(nlev)),1/4*psi(1,n0k(nlev,k)+1));
-    %        end
-    %    end
-    %end
-    
-    %c0=zeros([nmodes+1 npaths]);
-    %c0(1:end-1,:)=sqrt(n0k+1/2).*exp(1i*phi0k);
-    
-    %super dumb initial state
-    %c0(1:end-1)=alpha0_n;
     
     dumw=zeros([1 npaths]);
     %initnorm2=diag(c0(1:end-1,:)'*c0(1:end-1,:)); 
@@ -183,7 +128,6 @@ function [samples,times]=npw_nofilter()
     int_zeta2=sum(w_4f.*zeta.*zeta);
     %zeta2=zeta.*zeta;
     
-    delt_4f=diag(trans_4f*trans_4f');
     function F=f(c,~)
 
         F=0;
@@ -197,8 +141,8 @@ function [samples,times]=npw_nofilter()
         %nl feedback
         %ufb=-sum(w_4f.*imag(sum(w.'.*conj(psi).*abs(psi).^2.*(trans_4f*(0.5*(sqrtnp1.*sqrtnp2.*[c(3:end-1,:);zeros([2 npaths])]+...
         %    sqrtn.*sqrtnm1.*[zeros([2 npaths]);c(1:end-3,:)])-(nx+0.5).*c(1:end-1,:))),2)))/(norm^2);
-        %wigner correction added 30/08
-        F=F-[(g_1D)*(1i)*invtrans_4f*(w_4f.*(abs(psi).^2.*psi-delt_4f.*psi));dumw];
+        
+        F=F-[(g_1D)*(1i)*invtrans_4f*(w_4f.*conj(psi).*psi.*psi);dumw];
         
         %feedback Hamiltonian
         
@@ -239,16 +183,16 @@ function [samples,times]=npw_nofilter()
         
         %energy-damping feedback
         %compute energy-damping feedback potential
-        ved=imag(sum(w.'.*conj(psi).*(trans_4f*(0.5*(sqrtnp1.*sqrtnp2.*[c(3:end-1,:);zeros([2 npaths])]+sqrtn.*sqrtnm1.*[zeros([2 npaths]);c(1:end-3,:)])-(nx+0.5).*c(1:end-1,:))),2));
-        F=F+1i*[fbnl/norm*invtrans_4f*(w_4f.*ved.*psi);dumw];
-        
+        %ved=imag(sum(w.'.*conj(psi).*(trans_4f*(0.5*(sqrtnp1.*sqrtnp2.*[c(3:end-1,:);zeros([2 npaths])]+sqrtn.*sqrtnm1.*[zeros([2 npaths]);c(1:end-3,:)])-(nx+0.5).*c(1:end-1,:))),2));
+        %F=F+1i*[fbnl/norm*invtrans_4f*(w_4f.*ved.*psi);dumw];
         
         %compute 'quantum noise control' (from michael's NJP 2013)
         psi_3f=trans_3f*c(1:end-1,:);
-        %dpsi_3f_dx=trans_3f*(sqrtn12.*[c(2:end-1,:);zeros([1 npaths])]+sqrtn2.*[zeros([1 npaths]);c(1:end-2,:)]);
+        dpsi_3f_dx=trans_3f*(sqrtn12.*[c(2:end-1,:);zeros([1 npaths])]+sqrtn2.*[zeros([1 npaths]);c(1:end-2,:)]);
         %compute potential using fourier transforms
-        %vqnc=invfourier_3f*(1i*x_3f.*(fourier_3f*imag(psi_3f.*dpsi_3f_dx)).*nu_k3f2)*w;
-        %F=F-1i*fbnl/norm*[invtrans_3f*(vqnc.*psi_3f);dumw];
+        vqnc=invfourier_3f*(1i*x_3f.*(fourier_3f*imag(psi_3f.*dpsi_3f_dx)).*nu_k3f2)*w;
+        F=F-1i*fbnl/norm*[invtrans_3f*(vqnc.*psi_3f);dumw];
+        
         
         %calculate deterministic weight bits - notation from my notes
         %2018/02/01
@@ -325,6 +269,7 @@ function [samples,times]=npw_nofilter()
         
         %breed
         while maxw-minw > breedgap
+            fprintf("breeding\n");
             c(end,mini)=maxw-log(2);
             c(end,maxi)=maxw-log(2);
             c(1:end-1,mini)=c(1:end-1,maxi);
@@ -361,12 +306,8 @@ function [samples,times]=npw_nofilter()
         
         %nl energy
         psi=trans_4f*c(1:end-1,:); %only use the field part, not the weights
-        
-        %dens_x=conj(psi).*psi-1/2*diag(delt4f);
-        %enlpath=0.5*g_1D*sum(w_4f.*(dens_x.^2-dens_x.*diag(delt4f)),1);
-        %proper wigner correction (29/8/2018)
-        dens_x_sym=conj(psi).*psi;
-        enlpath=0.5*g_1D*sum(w_4f.*(dens_x_sym.^2-2*dens_x_sym.*diag(delt4f)+0.5*diag(delt4f).^2),1);
+        dens_x=conj(psi).*psi-1/2*diag(delt4f);
+        enlpath=0.5*g_1D*sum(w_4f.*(dens_x.^2-dens_x.*diag(delt4f)),1);
         e=e+w*enlpath';
         %energy per particle
         avg_N=sum((conj(c(1:end-1,:)).*c(1:end-1,:)-0.5*ones([nmodes npaths]))*w.');
@@ -426,10 +367,7 @@ function [samples,times]=npw_nofilter()
 
     ipevol=[-(1i)*(nx+0.5); 0];
 
-    seed1=randi([0 nsteps*nmodes*npaths]);
-    seed2=randi([0 nsteps*nmodes*npaths]);
-    
-    [samples,times]=rk4int(c0,@f,ipevol,true,2,{@fieldnoise @weightevol},{[nmodes npaths],[nmodes 1]},[seed1 seed2],0,time_int,nsteps,...
+    [samples,times]=rk4int(c0,@f,ipevol,true,2,{@fieldnoise @weightevol},{[nmodes npaths],[nmodes 1]},[103029 837189039],0,time_int,nsteps,...
         {@norm,@field,@eE,@obdm,@obdmx,@obdmk,@evenness,@momentvar,@fbV},[500 100 500 100 100 100 500 100 100],{@breed},false);
     fprintf("bred %d times\n",breedcount);
 end
