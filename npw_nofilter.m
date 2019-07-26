@@ -1,39 +1,40 @@
-function [samples,times]=npw_nofilter()
+function [samples,times]=npw_nofilter(initstate,alpha,measres)
     %initialise RNG (comment out for parfor, deal with random substreams
     %independently or use default behaviour
     %rng('shuffle');
     %NPW simulation without system-filter separation
-    nmodes=30;
-    npaths=800;
+    nmodes=20;
+    npaths=1000;
     initw=zeros([1 npaths]);%initial log weights
     
     %import initial state
     %field representation should be c-matrix of size [npaths nmodes+1].
     %last element of each row holds the log weight.
-    sample=0;
-    load('sample-lowtemp.mat','sample');
+    %sample=0;
+    %load('sample-jl.mat','sample');
     %shuffle the sample
-    sample=sample(:,randperm(size(sample,2)));
+    %sample=sample(:,randperm(size(sample,2)));
     %take a path from the thermal SPGPE state and use it to generate an NPW
     %state
     
-    alpha0_n=sample(:,1);
-    n0k=zeros([nmodes npaths]);
-    phi0k=zeros([nmodes npaths]);
+    %alpha0_n=sample(:,1);%[0;sqrt(1000);zeros(nmodes-2,1)];
+%     n0k=zeros([nmodes npaths]);
+%     phi0k=zeros([nmodes npaths]);
+%     
+%     for k=1:npaths
+%        n0k(:,k)=poissrnd(abs(alpha0_n).^2);
+%        for nlev=1:nmodes
+%            if n0k(nlev,k)==0
+%                phi0k(nlev,k)=2*pi*rand();
+%            else
+%                phi0k(nlev,k)=normrnd(angle(alpha0_n(nlev)),1/4*psi(1,n0k(nlev,k)+1));
+%            end
+%        end
+%     end
     
-    for k=1:npaths
-        n0k(:,k)=poissrnd(abs(alpha0_n).^2);
-        for nlev=1:nmodes
-            if n0k(nlev,k)==0
-                phi0k(nlev,k)=2*pi*rand();
-            else
-                phi0k(nlev,k)=normrnd(angle(alpha0_n(nlev)),1/4*psi(1,n0k(nlev,k)+1));
-            end
-        end
-    end
-    
-    c0=zeros([nmodes+1 npaths]);
-    c0(1:end-1,:)=sqrt(n0k+1/2).*exp(1i*phi0k);
+    c0=initstate;
+    %c0(1:end-1,:)=repmat(alpha0_n,[1 npaths])+(randn(nmodes,npaths)+1i*randn(nmodes,npaths))/2;
+    %c0(1:end-1,:)=sqrt(n0k+1/2).*exp(1i*phi0k);
 
     
     %test the ground state
@@ -67,7 +68,7 @@ function [samples,times]=npw_nofilter()
     Lambda = 50.0;
     
     % Effective 1D interaction strength
-    g_1D = 0.4;%2.0 * Lambda * a_s / sqrt( hbar / (m * omega_x) );
+    g_1D = 0.01;%0.4;%2.0 * Lambda * a_s / sqrt( hbar / (m * omega_x) );
 
     % Chemical potential
     %mu = 0;%0.8* T;
@@ -80,24 +81,23 @@ function [samples,times]=npw_nofilter()
     
     %measurement params
     %strength
-    alpha=0.00;
     sqrta=sqrt(alpha);
     %resolution
-    r=0.1;
+    r=measres;
     %efficiency
     eta=1.0;
     sqrte=sqrt(eta);
     
     %feedback params
     fbsl=1.0;%1.0;
-    fbbr=0.25;%0.25;
-    fbnl=40;%100.0;
+    fbbr=0;%0.25;
+    fbnl=0.01;%100.0;
     
     % EVOLUTION
 
     % Time interval of integration
-    time_int=10;
-    nsteps=25000;
+    time_int=100;
+    nsteps=50000;
 
 
     %generate transforms here
@@ -153,6 +153,13 @@ function [samples,times]=npw_nofilter()
     %super dumb initial state
     %c0(1:end-1)=alpha0_n;
     
+    %'ground' state
+    %load('gssample.mat','alpha0_n');
+    %alpha0_n=zeros(nmodes,1);
+    %alpha0_n(1)=sqrt(1000);
+    %c0(1:end-1,:)=repmat(alpha0_n,[1 npaths])+(randn(nmodes,npaths)+1i*randn(nmodes,npaths))/2;
+
+    
     dumw=zeros([1 npaths]);
     %initnorm2=diag(c0(1:end-1,:)'*c0(1:end-1,:)); 
     %function c=renormalise(c,~)
@@ -171,10 +178,10 @@ function [samples,times]=npw_nofilter()
     
     Fdelt_4f=trans_4f*(((-1i).^nx).*invtrans_3f*(w_3f.*sum(trans_3f.^2,2)));
     %define kernel in four-field grid
-    nu_k=sqrt(r/(2*gamma(5/4)))*exp(-(r*x_4f/sqrt(2)).^4/2);%k scaled appropriately for the four-field grid
+    nu_k=sqrt(r)/(2*gamma(5/4))*exp(-(r*x_4f/sqrt(2)).^4/2);%k scaled appropriately for the four-field grid
     
     %define kernel with k scaled to 3-field grid
-    nu_k3f=sqrt(r/(2*gamma(5/4)))*exp(-(r*x_3f/sqrt(3/2)).^4/2);%k scaled appropriately for the three-field grid
+    nu_k3f=sqrt(r)/(2*gamma(5/4))*exp(-(r*x_3f/sqrt(3/2)).^4/2);%k scaled appropriately for the three-field grid
     
     nu_k3f2=nu_k3f.^2;
     
@@ -184,7 +191,7 @@ function [samples,times]=npw_nofilter()
     %zeta2=zeta.*zeta;
     
     delt_4f=diag(trans_4f*trans_4f');
-    function F=f(c,~)
+    function F=f(c,t)
 
         F=0;
         
@@ -198,7 +205,9 @@ function [samples,times]=npw_nofilter()
         %ufb=-sum(w_4f.*imag(sum(w.'.*conj(psi).*abs(psi).^2.*(trans_4f*(0.5*(sqrtnp1.*sqrtnp2.*[c(3:end-1,:);zeros([2 npaths])]+...
         %    sqrtn.*sqrtnm1.*[zeros([2 npaths]);c(1:end-3,:)])-(nx+0.5).*c(1:end-1,:))),2)))/(norm^2);
         %wigner correction added 30/08
-        F=F-[(g_1D)*(1i)*invtrans_4f*(w_4f.*(abs(psi).^2.*psi-delt_4f.*psi));dumw];
+        
+        
+        F=F-[(g_1D)*(1i)*invtrans_4f*(w_4f.*(abs(psi).^2.*psi-delt_4f.*psi));dumw];%-delt_4f.*psi
         
         %feedback Hamiltonian
         
